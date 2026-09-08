@@ -14,7 +14,7 @@ export default async function SearchPage({
   searchParams: { category?: string; city?: string; sort?: string; error?: string };
 }) {
   const user = await getCurrentUser();
-  const categories = db.select().from(schema.serviceCategories).all();
+  const categories = await db.select().from(schema.serviceCategories);
 
   const city = searchParams.city ?? user?.city ?? "Lagos";
   const origin = (user?.lat && user?.lng ? { lat: user.lat, lng: user.lng } : null) ?? NIGERIAN_CITIES[city] ?? NIGERIAN_CITIES.Lagos;
@@ -26,15 +26,14 @@ export default async function SearchPage({
     with: { user: true, category: true }
   });
 
-  const ratingRows = db
+  const ratingRows = await db
     .select({
       revieweeId: schema.reviews.revieweeId,
-      avgRating: sql<number>`avg(${schema.reviews.rating})`,
-      count: sql<number>`count(*)`
+      avgRating: sql<number>`avg(${schema.reviews.rating})::float`,
+      count: sql<number>`count(*)::int`
     })
     .from(schema.reviews)
-    .groupBy(schema.reviews.revieweeId)
-    .all();
+    .groupBy(schema.reviews.revieweeId);
   const ratingsByUser = new Map(ratingRows.map((r) => [r.revieweeId, { avg: r.avgRating, count: r.count }]));
 
   let results = providers

@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 
 export default async function HomePage() {
   const user = await getCurrentUser();
-  const categories = db.select().from(schema.serviceCategories).all();
+  const categories = await db.select().from(schema.serviceCategories);
 
   return (
     <div className="space-y-20">

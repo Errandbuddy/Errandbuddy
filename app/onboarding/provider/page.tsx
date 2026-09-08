@@ -16,7 +16,7 @@ export default async function ProviderOnboardingPage({
   if (!user) redirect("/login");
   if (user.role !== "PROVIDER") redirect("/dashboard");
 
-  const categories = db.select().from(schema.serviceCategories).all();
+  const categories = await db.select().from(schema.serviceCategories);
   const existing = user.providerProfile;
 
   return (

@@ -12,9 +12,9 @@ export default async function DashboardPage() {
 
   if (user.role === "ADMIN") {
     const [openDisputes, allJobs, released] = await Promise.all([
-      db.select().from(schema.jobs).where(eq(schema.jobs.status, "DISPUTED")).all(),
-      db.select().from(schema.jobs).all(),
-      db.select().from(schema.jobs).where(eq(schema.jobs.status, "RELEASED")).all()
+      db.select().from(schema.jobs).where(eq(schema.jobs.status, "DISPUTED")),
+      db.select().from(schema.jobs),
+      db.select().from(schema.jobs).where(eq(schema.jobs.status, "RELEASED"))
     ]);
     const volume = released.reduce((s, j) => s + j.priceXLM, 0);
 
