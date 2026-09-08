@@ -24,7 +24,7 @@ export async function signup(formData: FormData) {
     );
   }
 
-  const existing = db.select().from(schema.users).where(eq(schema.users.email, email)).get();
+  const [existing] = await db.select().from(schema.users).where(eq(schema.users.email, email));
   if (existing) {
     redirect(`/signup?error=${encodeURIComponent("An account with that email already exists. Try logging in instead.")}&role=${role}`);
   }
@@ -42,7 +42,7 @@ export async function signup(formData: FormData) {
     );
   }
 
-  const user = db
+  const [user] = await db
     .insert(schema.users)
     .values({
       name,
@@ -54,17 +54,15 @@ export async function signup(formData: FormData) {
       lat: cityCenter.lat,
       lng: cityCenter.lng
     })
-    .returning()
-    .get();
+    .returning();
 
-  db.insert(schema.walletAccounts)
+  await db.insert(schema.walletAccounts)
     .values({
       userId: user.id,
       stellarPublicKey: account!.publicKey,
       encryptedSecret: account!.encryptedSecret,
       network: process.env.STELLAR_NETWORK ?? "testnet"
-    })
-    .run();
+    });
 
   setSessionCookie(signSession({ userId: user.id, role: user.role as Role }));
 
@@ -78,7 +76,7 @@ export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
 
-  const user = db.select().from(schema.users).where(eq(schema.users.email, email)).get();
+  const [user] = await db.select().from(schema.users).where(eq(schema.users.email, email));
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
     redirect(`/login?error=${encodeURIComponent("Incorrect email or password.")}`);
   }

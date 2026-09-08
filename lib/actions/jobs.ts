@@ -40,7 +40,7 @@ export async function requestJob(formData: FormData) {
     redirect(`/providers/${providerProfile!.id}?error=${encodeURIComponent("You can't book yourself.")}`);
   }
 
-  const job = db
+  const [job] = await db
     .insert(schema.jobs)
     .values({
       customerId: user.id,
@@ -56,8 +56,7 @@ export async function requestJob(formData: FormData) {
       priceXLM,
       status: "REQUESTED"
     })
-    .returning()
-    .get();
+    .returning();
 
   revalidatePath("/dashboard");
   redirect(`/jobs/${job.id}?ok=${encodeURIComponent("Request sent! We'll notify the artisan.")}`);
@@ -65,7 +64,7 @@ export async function requestJob(formData: FormData) {
 
 async function loadJobForActor(jobId: string) {
   const user = await requireUser();
-  const job = db.select().from(schema.jobs).where(eq(schema.jobs.id, jobId)).get();
+  const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.id, jobId));
   if (!job) fail(jobId, "Job not found.");
   const isCustomer = job!.customerId === user.id;
   const isProvider = job!.providerId === user.id;
@@ -77,7 +76,7 @@ export async function acceptJob(jobId: string) {
   const { job, isProvider } = await loadJobForActor(jobId);
   if (!isProvider) fail(jobId, "Only the requested artisan can accept this job.");
   if (job.status !== "REQUESTED") fail(jobId, "This job can no longer be accepted.");
-  db.update(schema.jobs).set({ status: "ACCEPTED" }).where(eq(schema.jobs.id, jobId)).run();
+  await db.update(schema.jobs).set({ status: "ACCEPTED" }).where(eq(schema.jobs.id, jobId));
   revalidatePath(`/jobs/${jobId}`);
   ok(jobId, "Job accepted. Waiting for the customer to fund escrow.");
 }
@@ -88,7 +87,7 @@ export async function cancelJob(jobId: string) {
   if (!["REQUESTED", "ACCEPTED"].includes(job.status)) {
     fail(jobId, "This job has already progressed past cancellation — raise a dispute instead.");
   }
-  db.update(schema.jobs).set({ status: "CANCELLED" }).where(eq(schema.jobs.id, jobId)).run();
+  await db.update(schema.jobs).set({ status: "CANCELLED" }).where(eq(schema.jobs.id, jobId));
   revalidatePath(`/jobs/${jobId}`);
   ok(jobId, "Job cancelled. No funds were moved.");
 }
@@ -98,11 +97,10 @@ export async function fundEscrow(jobId: string) {
   if (!isCustomer) fail(jobId, "Only the customer can fund escrow.");
   if (job.status !== "ACCEPTED") fail(jobId, "This job isn't ready for escrow funding.");
 
-  const customerWallet = db
+  const [customerWallet] = await db
     .select()
     .from(schema.walletAccounts)
-    .where(eq(schema.walletAccounts.userId, user.id))
-    .get();
+    .where(eq(schema.walletAccounts.userId, user.id));
   if (!customerWallet) fail(jobId, "Your wallet isn't set up yet.");
 
   const platform = await ensurePlatformAccount();
@@ -128,14 +126,12 @@ export async function fundEscrow(jobId: string) {
     fail(jobId, "The Stellar payment failed. Please try again in a moment.");
   }
 
-  db.transaction((tx) => {
-    tx.update(schema.jobs)
+  await db.transaction(async (tx) => {
+    await tx.update(schema.jobs)
       .set({ status: "ESCROW_FUNDED", escrowTxHash: hash })
-      .where(eq(schema.jobs.id, jobId))
-      .run();
-    tx.insert(schema.escrowEvents)
-      .values({ jobId, type: "FUNDED", stellarTxHash: hash, amountXLM: job.priceXLM })
-      .run();
+      .where(eq(schema.jobs.id, jobId));
+    await tx.insert(schema.escrowEvents)
+      .values({ jobId, type: "FUNDED", stellarTxHash: hash, amountXLM: job.priceXLM });
   });
 
   revalidatePath(`/jobs/${jobId}`);
@@ -146,7 +142,7 @@ export async function startJob(jobId: string) {
   const { job, isProvider } = await loadJobForActor(jobId);
   if (!isProvider) fail(jobId, "Only the assigned artisan can start this job.");
   if (job.status !== "ESCROW_FUNDED") fail(jobId, "This job isn't ready to start.");
-  db.update(schema.jobs).set({ status: "IN_PROGRESS" }).where(eq(schema.jobs.id, jobId)).run();
+  await db.update(schema.jobs).set({ status: "IN_PROGRESS" }).where(eq(schema.jobs.id, jobId));
   revalidatePath(`/jobs/${jobId}`);
   ok(jobId, "Marked as in progress.");
 }
@@ -157,7 +153,7 @@ export async function markComplete(jobId: string) {
   if (!["ESCROW_FUNDED", "IN_PROGRESS"].includes(job.status)) {
     fail(jobId, "This job isn't in a state that can be marked complete.");
   }
-  db.update(schema.jobs).set({ status: "COMPLETED_BY_PROVIDER" }).where(eq(schema.jobs.id, jobId)).run();
+  await db.update(schema.jobs).set({ status: "COMPLETED_BY_PROVIDER" }).where(eq(schema.jobs.id, jobId));
   revalidatePath(`/jobs/${jobId}`);
   ok(jobId, "Marked complete. Waiting for the customer to confirm and release payment.");
 }
@@ -172,11 +168,10 @@ export async function confirmAndRelease(formData: FormData) {
   const comment = String(formData.get("comment") ?? "").trim();
 
   const platform = await ensurePlatformAccount();
-  const providerWallet = db
+  const [providerWallet] = await db
     .select()
     .from(schema.walletAccounts)
-    .where(eq(schema.walletAccounts.userId, job.providerId))
-    .get();
+    .where(eq(schema.walletAccounts.userId, job.providerId));
   if (!providerWallet) fail(jobId, "The artisan's wallet could not be found.");
 
   let hash: string;
@@ -192,23 +187,20 @@ export async function confirmAndRelease(formData: FormData) {
     fail(jobId, "Releasing the on-chain payment failed. Please try again in a moment.");
   }
 
-  db.transaction((tx) => {
-    tx.update(schema.jobs)
+  await db.transaction(async (tx) => {
+    await tx.update(schema.jobs)
       .set({ status: "RELEASED", releaseTxHash: hash })
-      .where(eq(schema.jobs.id, jobId))
-      .run();
-    tx.insert(schema.escrowEvents)
-      .values({ jobId, type: "RELEASED", stellarTxHash: hash, amountXLM: job.priceXLM })
-      .run();
-    tx.insert(schema.reviews)
+      .where(eq(schema.jobs.id, jobId));
+    await tx.insert(schema.escrowEvents)
+      .values({ jobId, type: "RELEASED", stellarTxHash: hash, amountXLM: job.priceXLM });
+    await tx.insert(schema.reviews)
       .values({
         jobId,
         reviewerId: user.id,
         revieweeId: job.providerId,
         rating,
         comment: comment || "(no comment left)"
-      })
-      .run();
+      });
   });
 
   revalidatePath(`/jobs/${jobId}`);
@@ -227,14 +219,12 @@ export async function raiseDispute(formData: FormData) {
   const reason = String(formData.get("reason") ?? "").trim();
   if (reason.length < 5) fail(jobId, "Please describe the issue in a bit more detail.");
 
-  db.transaction((tx) => {
-    tx.update(schema.jobs)
+  await db.transaction(async (tx) => {
+    await tx.update(schema.jobs)
       .set({ status: "DISPUTED", disputeReason: reason, disputeRaisedBy: user.id })
-      .where(eq(schema.jobs.id, jobId))
-      .run();
-    tx.insert(schema.escrowEvents)
-      .values({ jobId, type: "DISPUTE_OPENED", amountXLM: job.priceXLM, note: reason })
-      .run();
+      .where(eq(schema.jobs.id, jobId));
+    await tx.insert(schema.escrowEvents)
+      .values({ jobId, type: "DISPUTE_OPENED", amountXLM: job.priceXLM, note: reason });
   });
 
   revalidatePath(`/jobs/${jobId}`);
@@ -252,11 +242,10 @@ export async function resolveDispute(formData: FormData) {
   const platform = await ensurePlatformAccount();
 
   if (decision === "release") {
-    const providerWallet = db
+    const [providerWallet] = await db
       .select()
       .from(schema.walletAccounts)
-      .where(eq(schema.walletAccounts.userId, job.providerId))
-      .get();
+      .where(eq(schema.walletAccounts.userId, job.providerId));
     if (!providerWallet) fail(jobId, "The artisan's wallet could not be found.");
     const hash = await sendPayment({
       fromEncryptedSecret: platform.encryptedSecret,
@@ -264,21 +253,18 @@ export async function resolveDispute(formData: FormData) {
       amountXLM: job.priceXLM,
       memo: `resolve-rel:${jobId}`.slice(0, 28)
     });
-    db.transaction((tx) => {
-      tx.update(schema.jobs)
+    await db.transaction(async (tx) => {
+      await tx.update(schema.jobs)
         .set({ status: "RELEASED", releaseTxHash: hash })
-        .where(eq(schema.jobs.id, jobId))
-        .run();
-      tx.insert(schema.escrowEvents)
-        .values({ jobId, type: "DISPUTE_RESOLVED_RELEASE", stellarTxHash: hash, amountXLM: job.priceXLM })
-        .run();
+        .where(eq(schema.jobs.id, jobId));
+      await tx.insert(schema.escrowEvents)
+        .values({ jobId, type: "DISPUTE_RESOLVED_RELEASE", stellarTxHash: hash, amountXLM: job.priceXLM });
     });
   } else {
-    const customerWallet = db
+    const [customerWallet] = await db
       .select()
       .from(schema.walletAccounts)
-      .where(eq(schema.walletAccounts.userId, job.customerId))
-      .get();
+      .where(eq(schema.walletAccounts.userId, job.customerId));
     if (!customerWallet) fail(jobId, "The customer's wallet could not be found.");
     const hash = await sendPayment({
       fromEncryptedSecret: platform.encryptedSecret,
@@ -286,14 +272,12 @@ export async function resolveDispute(formData: FormData) {
       amountXLM: job.priceXLM,
       memo: `resolve-ref:${jobId}`.slice(0, 28)
     });
-    db.transaction((tx) => {
-      tx.update(schema.jobs)
+    await db.transaction(async (tx) => {
+      await tx.update(schema.jobs)
         .set({ status: "REFUNDED", refundTxHash: hash })
-        .where(eq(schema.jobs.id, jobId))
-        .run();
-      tx.insert(schema.escrowEvents)
-        .values({ jobId, type: "DISPUTE_RESOLVED_REFUND", stellarTxHash: hash, amountXLM: job.priceXLM })
-        .run();
+        .where(eq(schema.jobs.id, jobId));
+      await tx.insert(schema.escrowEvents)
+        .values({ jobId, type: "DISPUTE_RESOLVED_REFUND", stellarTxHash: hash, amountXLM: job.priceXLM });
     });
   }
 

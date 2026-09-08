@@ -30,18 +30,16 @@ export async function completeProviderOnboarding(formData: FormData) {
 
   const cityCenter = NIGERIAN_CITIES[city] ?? NIGERIAN_CITIES.Lagos;
 
-  db.update(schema.users)
+  await db.update(schema.users)
     .set({ city, lat: cityCenter.lat, lng: cityCenter.lng })
-    .where(eq(schema.users.id, user.id))
-    .run();
+    .where(eq(schema.users.id, user.id));
 
-  db.insert(schema.providerProfiles)
+  await db.insert(schema.providerProfiles)
     .values({ userId: user.id, categoryId, bio, yearsExperience, hourlyRateXLM, avatarEmoji })
     .onConflictDoUpdate({
       target: schema.providerProfiles.userId,
       set: { categoryId, bio, yearsExperience, hourlyRateXLM, avatarEmoji }
-    })
-    .run();
+    });
 
   revalidatePath("/search");
   redirect("/dashboard");
@@ -52,6 +50,6 @@ export async function completeProviderOnboarding(formData: FormData) {
  * in /search is meaningful. */
 export async function updateMyLocation(lat: number, lng: number) {
   const user = await requireUser();
-  db.update(schema.users).set({ lat, lng }).where(eq(schema.users.id, user.id)).run();
+  await db.update(schema.users).set({ lat, lng }).where(eq(schema.users.id, user.id));
   revalidatePath("/search");
 }
