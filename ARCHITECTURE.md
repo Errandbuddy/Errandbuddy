@@ -18,7 +18,7 @@ lib/actions/        — Server Actions: the only way data gets mutated
 lib/stellar.ts       — all Stellar wiring, behind a live/mock adapter
 lib/auth.ts          — session cookie (JWT) + current-user loader
 lib/crypto.ts        — AES-256-GCM encryption for custodial secret keys
-lib/db.ts            — Drizzle client (better-sqlite3)
+lib/db.ts            — Drizzle client (Postgres via postgres.js)
 db/schema.ts          — the entire data model
 scripts/             — migrate, seed, and an end-to-end Playwright smoke test
 contracts/           — scaffold for the on-chain escrow upgrade (multisig,

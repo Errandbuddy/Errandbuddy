@@ -27,7 +27,7 @@ lib/actions/         — Server Actions: the ONLY way data gets mutated
 lib/stellar.ts       — all Stellar wiring, behind a live/mock adapter
 lib/auth.ts          — session cookie (JWT) + current-user loader
 lib/crypto.ts        — AES-256-GCM encryption for custodial secret keys
-lib/db.ts            — Drizzle client (better-sqlite3)
+lib/db.ts            — Drizzle client (Postgres via postgres.js)
 lib/geo.ts           — Nigerian city centroids + haversine distance
 lib/currency.ts      — XLM → illustrative NGN display estimate
 db/schema.ts         — the entire data model (Drizzle schema)
@@ -82,15 +82,19 @@ real scaling or deployment constraint.
 - Schema changes: edit `db/schema.ts` → `npm run db:generate` (creates a
   migration file) → `npm run db:migrate` (applies it). Commit the generated
   SQL under `drizzle/`.
-- Multi-row writes that must be atomic use `db.transaction((tx) => {...})`
-  — better-sqlite3's driver is synchronous, so **no `await` inside a
-  transaction callback**.
+- Multi-row writes that must be atomic use
+  `await db.transaction(async (tx) => {...})` — the Postgres driver is async,
+  so every `tx`/`db` call (including inside a transaction callback) needs
+  `await`. There's no `.get()`/`.all()`/`.run()` sugar like the old
+  better-sqlite3 driver had — `db.select()...` etc. return promises directly.
 
 ## Commands
 
 ```bash
 npm install
 cp .env.example .env
+# set DATABASE_URL to a Postgres connection string (local or a free Neon/
+# Supabase/Vercel Postgres instance)
 openssl rand -hex 32   # run twice; paste into JWT_SECRET and
                         # WALLET_ENCRYPTION_KEY in .env
 
@@ -106,6 +110,15 @@ npm run test:e2e         # Playwright smoke test (16 checks, full lifecycle)
 `STELLAR_MODE` should stay `live` (the `.env.example` default) on a normal
 machine with internet access. Only set it to `mock` if your network blocks
 `*.stellar.org`.
+
+## Commit conventions
+
+Commit and PR messages must **not** include any Claude/Claude Code
+attribution — no `Co-Authored-By: Claude`, no `Generated with Claude Code`
+footer, no session links. Commits go out under the repo owner's identity
+only. (Also set via `attribution.commit`/`attribution.pr` in
+`.claude/settings.json` — this note is the backstop in case that setting
+doesn't apply to a given commit path.)
 
 ## Where to find contribution ideas
 

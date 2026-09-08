@@ -73,19 +73,15 @@ Roughly ordered by impact. Each is scoped to be reviewable as a single PR.
 7. **Photo uploads on job requests and completed work.** Let a customer attach
    a photo of the problem, and let a provider attach a "done" photo before
    marking a job complete.
-8. **Postgres migration.** Swap `db/schema.ts`'s `sqlite-core` imports for
-   `pg-core`, point `drizzle.config.ts` and `lib/db.ts` at a Postgres driver
-   (e.g. `postgres.js`), and update the migration scripts. SQLite is fine for
-   this MVP but won't hold up under concurrent writes in production.
-9. **Non-custodial wallet option.** Let a user connect an existing Stellar
+8. **Non-custodial wallet option.** Let a user connect an existing Stellar
    wallet (Freighter) instead of using the embedded custodial one, with
    client-side transaction signing for their own payments.
-10. **Pagination + full-text search on `/search`.** Right now it loads every
-    provider profile and filters in memory — fine for a seeded demo, not for
-    thousands of artisans.
-11. **Multi-language support.** Add Yoruba/Igbo/Hausa translations — this
+9. **Pagination + full-text search on `/search`.** Right now it loads every
+   provider profile and filters in memory — fine for a seeded demo, not for
+   thousands of artisans.
+10. **Multi-language support.** Add Yoruba/Igbo/Hausa translations — this
     market is not English-only, especially outside major cities.
-12. **Unit tests for `lib/actions/jobs.ts`'s state machine.** The Playwright
+11. **Unit tests for `lib/actions/jobs.ts`'s state machine.** The Playwright
     smoke test (`scripts/smoke-test.mjs`) covers the happy path and one
     dispute end-to-end, but the status-transition guards (e.g. "can't fund
     escrow twice", "can't dispute a cancelled job") don't have focused tests.

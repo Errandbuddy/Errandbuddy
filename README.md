@@ -51,8 +51,8 @@ built on).
 
 - **Next.js 14** (App Router, TypeScript, Server Actions — no separate REST API layer)
 - **Tailwind CSS**
-- **Drizzle ORM + better-sqlite3** for the database (SQLite file for MVP simplicity;
-  the schema is Postgres-compatible — see ROADMAP.md)
+- **Drizzle ORM + Postgres** for the database (works with any Postgres — Neon,
+  Supabase, or Vercel's Postgres storage all have free tiers)
 - **@stellar/stellar-sdk** for all on-chain activity, behind a small adapter
   (`lib/stellar.ts`) that supports both real Stellar testnet and an offline
   simulated ledger (`STELLAR_MODE=mock`) — see [ARCHITECTURE.md](./ARCHITECTURE.md)
@@ -63,6 +63,8 @@ built on).
 ```bash
 npm install
 cp .env.example .env
+# set DATABASE_URL to any Postgres connection string (a free one from
+# neon.tech works, or point it at a local Postgres for development)
 # generate real secrets for JWT_SECRET and WALLET_ENCRYPTION_KEY:
 #   openssl rand -hex 32   (run twice, paste into .env)
 
@@ -127,8 +129,6 @@ path — 16 checks, all against a production build.
   platform can technically move funds unilaterally today. Flagged as the
   highest-priority contribution; the planned upgrade path and scaffold live
   in [`contracts/`](./contracts/README.md).
-- **SQLite**, single-file database — fine for an MVP/demo, not for production
-  concurrency. See ROADMAP.md for the Postgres migration.
 - **XLM pricing with an illustrative NGN estimate**, not a real FX oracle or
   stablecoin settlement yet.
 - One dev-dependency advisory (a PostCSS source-map disclosure bundled inside

@@ -14,10 +14,11 @@
 - Seed data: 10 service categories, 8 artisans, 3 customers, 1 admin, sample
   reviews
 - End-to-end Playwright smoke test of the full lifecycle
+- Postgres database (works with any Postgres — Neon, Supabase, or Vercel
+  Storage all have free tiers)
 
 ## Phase 1 — production hardening
 
-- [ ] Postgres instead of SQLite (see CONTRIBUTING.md #8)
 - [ ] Real geocoding instead of city-centroid coordinates (#3)
 - [ ] Provider verification / KYC flow (#5)
 - [ ] Notifications — email at minimum, WhatsApp ideally, on every job status
