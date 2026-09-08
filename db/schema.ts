@@ -1,16 +1,14 @@
-import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, real, boolean, timestamp } from "drizzle-orm/pg-core";
 import { randomUUID } from "node:crypto";
 
 const id = () => text("id").primaryKey().$defaultFn(() => randomUUID());
-const createdAt = () =>
-  integer("created_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`);
+const createdAt = () => timestamp("created_at").notNull().defaultNow();
 
 // ---------------------------------------------------------------------------
 // Users
 // ---------------------------------------------------------------------------
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   id: id(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
@@ -21,9 +19,7 @@ export const users = sqliteTable("users", {
   lat: real("lat"),
   lng: real("lng"),
   createdAt: createdAt(),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`)
+  updatedAt: timestamp("updated_at").notNull().defaultNow()
 });
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -41,7 +37,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
 // ---------------------------------------------------------------------------
 // Wallets (custodial Stellar accounts — see lib/stellar.ts)
 // ---------------------------------------------------------------------------
-export const walletAccounts = sqliteTable("wallet_accounts", {
+export const walletAccounts = pgTable("wallet_accounts", {
   id: id(),
   userId: text("user_id")
     .notNull()
@@ -61,7 +57,7 @@ export const walletAccountsRelations = relations(walletAccounts, ({ one }) => ({
 // The platform's own custodial Stellar account, used as the escrow custodian
 // in this MVP (see lib/stellar.ts / ARCHITECTURE.md). Single-row table.
 // ---------------------------------------------------------------------------
-export const platformAccount = sqliteTable("platform_account", {
+export const platformAccount = pgTable("platform_account", {
   id: text("id").primaryKey().default("platform"),
   publicKey: text("public_key").notNull().unique(),
   encryptedSecret: text("encrypted_secret").notNull(),
@@ -78,7 +74,7 @@ export const platformAccount = sqliteTable("platform_account", {
 // Horizon-backed implementation; application code never touches this table
 // directly. Not used at all when STELLAR_MODE=live.
 // ---------------------------------------------------------------------------
-export const mockBalances = sqliteTable("mock_balances", {
+export const mockBalances = pgTable("mock_balances", {
   publicKey: text("public_key").primaryKey(),
   balanceXLM: real("balance_xlm").notNull().default(10000)
 });
@@ -86,7 +82,7 @@ export const mockBalances = sqliteTable("mock_balances", {
 // ---------------------------------------------------------------------------
 // Service categories
 // ---------------------------------------------------------------------------
-export const serviceCategories = sqliteTable("service_categories", {
+export const serviceCategories = pgTable("service_categories", {
   id: id(),
   name: text("name").notNull().unique(),
   slug: text("slug").notNull().unique(),
@@ -101,7 +97,7 @@ export const serviceCategoriesRelations = relations(serviceCategories, ({ many }
 // ---------------------------------------------------------------------------
 // Provider profiles
 // ---------------------------------------------------------------------------
-export const providerProfiles = sqliteTable("provider_profiles", {
+export const providerProfiles = pgTable("provider_profiles", {
   id: id(),
   userId: text("user_id")
     .notNull()
@@ -113,7 +109,7 @@ export const providerProfiles = sqliteTable("provider_profiles", {
   bio: text("bio").notNull(),
   yearsExperience: integer("years_experience").notNull().default(0),
   hourlyRateXLM: real("hourly_rate_xlm").notNull(),
-  isVerified: integer("is_verified", { mode: "boolean" }).notNull().default(false),
+  isVerified: boolean("is_verified").notNull().default(false),
   avatarEmoji: text("avatar_emoji").notNull().default("🧰"),
   createdAt: createdAt()
 });
@@ -130,7 +126,7 @@ export const providerProfilesRelations = relations(providerProfiles, ({ one, man
 // ---------------------------------------------------------------------------
 // Jobs (the escrow-backed booking lifecycle)
 // ---------------------------------------------------------------------------
-export const jobs = sqliteTable("jobs", {
+export const jobs = pgTable("jobs", {
   id: id(),
   customerId: text("customer_id")
     .notNull()
@@ -177,9 +173,7 @@ export const jobs = sqliteTable("jobs", {
   disputeRaisedBy: text("dispute_raised_by"),
 
   createdAt: createdAt(),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .default(sql`(unixepoch())`)
+  updatedAt: timestamp("updated_at").notNull().defaultNow()
 });
 
 export const jobsRelations = relations(jobs, ({ one, many }) => ({
@@ -205,7 +199,7 @@ export const jobsRelations = relations(jobs, ({ one, many }) => ({
 // ---------------------------------------------------------------------------
 // Reviews
 // ---------------------------------------------------------------------------
-export const reviews = sqliteTable("reviews", {
+export const reviews = pgTable("reviews", {
   id: id(),
   jobId: text("job_id")
     .notNull()
@@ -239,7 +233,7 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
 // ---------------------------------------------------------------------------
 // Escrow audit trail
 // ---------------------------------------------------------------------------
-export const escrowEvents = sqliteTable("escrow_events", {
+export const escrowEvents = pgTable("escrow_events", {
   id: id(),
   jobId: text("job_id")
     .notNull()
