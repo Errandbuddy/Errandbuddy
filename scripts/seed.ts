@@ -114,16 +114,15 @@ async function main() {
   console.log("[seed] inserting service categories…");
   const categoryIds: Record<string, string> = {};
   for (const c of CATEGORIES) {
-    const existing = db
+    const [existing] = await db
       .select()
       .from(schema.serviceCategories)
-      .where(eqSlug(c.slug))
-      .get();
+      .where(eqSlug(c.slug));
     if (existing) {
       categoryIds[c.slug] = existing.id;
       continue;
     }
-    const row = db.insert(schema.serviceCategories).values(c).returning().get();
+    const [row] = await db.insert(schema.serviceCategories).values(c).returning();
     categoryIds[c.slug] = row.id;
   }
 
@@ -146,16 +145,15 @@ async function main() {
   const providerRows: { userId: string; providerProfileId: string; categoryId: string }[] = [];
   for (const p of PROVIDERS) {
     const u = await upsertUser({ name: p.name, email: p.email, role: "PROVIDER", city: p.city });
-    const existingProfile = db
+    const [existingProfile] = await db
       .select()
       .from(schema.providerProfiles)
-      .where(eqUserId(u.id))
-      .get();
+      .where(eqUserId(u.id));
     let profileId: string;
     if (existingProfile) {
       profileId = existingProfile.id;
     } else {
-      const profile = db
+      const [profile] = await db
         .insert(schema.providerProfiles)
         .values({
           userId: u.id,
@@ -166,8 +164,7 @@ async function main() {
           avatarEmoji: p.avatar,
           isVerified: true
         })
-        .returning()
-        .get();
+        .returning();
       profileId = profile.id;
     }
     providerRows.push({ userId: u.id, providerProfileId: profileId, categoryId: categoryIds[p.category] });
@@ -190,14 +187,13 @@ async function main() {
       const review = sampleReviews[(reviewIdx + i) % sampleReviews.length];
       const price = 10 + ((reviewIdx + i) % 5) * 5;
 
-      const existingJob = db
+      const [existingJob] = await db
         .select()
         .from(schema.jobs)
-        .where(eqDemoJob(customerId, provider.providerProfileId, i))
-        .get();
+        .where(eqDemoJob(customerId, provider.providerProfileId, i));
       if (existingJob) continue;
 
-      const job = db
+      const [job] = await db
         .insert(schema.jobs)
         .values({
           customerId,
@@ -213,18 +209,16 @@ async function main() {
           escrowTxHash: "SEED_DATA_NOT_A_REAL_TX",
           releaseTxHash: "SEED_DATA_NOT_A_REAL_TX"
         })
-        .returning()
-        .get();
+        .returning();
 
-      db.insert(schema.reviews)
+      await db.insert(schema.reviews)
         .values({
           jobId: job.id,
           reviewerId: customerId,
           revieweeId: provider.userId,
           rating: review.rating,
           comment: review.comment
-        })
-        .run();
+        });
     }
     reviewIdx++;
   }
@@ -238,14 +232,14 @@ async function main() {
 }
 
 async function upsertUser(opts: { name: string; email: string; role: "CUSTOMER" | "PROVIDER" | "ADMIN"; city: string }) {
-  const existing = db.select().from(schema.users).where(eqEmail(opts.email)).get();
+  const [existing] = await db.select().from(schema.users).where(eqEmail(opts.email));
   if (existing) return existing;
 
   const account = await createFundedAccount();
   const cityCenter = NIGERIAN_CITIES[opts.city] ?? NIGERIAN_CITIES.Lagos;
   const passwordHash = await hashPassword("demo1234");
 
-  const user = db
+  const [user] = await db
     .insert(schema.users)
     .values({
       name: opts.name,
@@ -256,17 +250,15 @@ async function upsertUser(opts: { name: string; email: string; role: "CUSTOMER" 
       lat: cityCenter.lat,
       lng: cityCenter.lng
     })
-    .returning()
-    .get();
+    .returning();
 
-  db.insert(schema.walletAccounts)
+  await db.insert(schema.walletAccounts)
     .values({
       userId: user.id,
       stellarPublicKey: account.publicKey,
       encryptedSecret: account.encryptedSecret,
       network: process.env.STELLAR_NETWORK ?? "testnet"
-    })
-    .run();
+    });
 
   console.log(`  + ${opts.role.padEnd(8)} ${opts.name} <${opts.email}>`);
   return user;
