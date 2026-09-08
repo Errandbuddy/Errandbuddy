@@ -1,21 +1,23 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "@/db/schema";
 
 // Standard dev-mode singleton so Next.js hot-reload doesn't reopen the
-// SQLite file on every module reload.
-const globalForDb = globalThis as unknown as { sqlite?: Database.Database };
+// database connection on every module reload.
+const globalForDb = globalThis as unknown as { pgClient?: ReturnType<typeof postgres> };
 
-function resolveDbPath(): string {
-  const url = process.env.DATABASE_URL ?? "file:./dev.db";
-  return url.startsWith("file:") ? url.slice("file:".length) : url;
+function resolveDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not set");
+  return url;
 }
 
-const sqlite = globalForDb.sqlite ?? new Database(resolveDbPath());
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+const url = resolveDatabaseUrl();
+const isLocal = /localhost|127\.0\.0\.1/.test(url);
 
-if (process.env.NODE_ENV !== "production") globalForDb.sqlite = sqlite;
+const client = globalForDb.pgClient ?? postgres(url, isLocal ? {} : { ssl: "require" });
 
-export const db = drizzle(sqlite, { schema });
+if (process.env.NODE_ENV !== "production") globalForDb.pgClient = client;
+
+export const db = drizzle(client, { schema });
 export { schema };

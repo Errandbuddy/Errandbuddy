@@ -1,12 +1,22 @@
 import "dotenv/config";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 
-const dbPath = (process.env.DATABASE_URL ?? "file:./dev.db").replace(/^file:/, "");
-const sqlite = new Database(dbPath);
-const db = drizzle(sqlite);
+async function main() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL is not set");
+  const isLocal = /localhost|127\.0\.0\.1/.test(url);
 
-migrate(db, { migrationsFolder: "./drizzle" });
-console.log(`[migrate] applied migrations to ${dbPath}`);
-sqlite.close();
+  const client = postgres(url, { max: 1, ...(isLocal ? {} : { ssl: "require" as const }) });
+  const db = drizzle(client);
+
+  await migrate(db, { migrationsFolder: "./drizzle" });
+  console.log("[migrate] applied migrations to Postgres");
+  await client.end();
+}
+
+main().catch((err) => {
+  console.error("[migrate] failed:", err);
+  process.exit(1);
+});
