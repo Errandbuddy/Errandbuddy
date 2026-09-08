@@ -89,11 +89,10 @@ async function createFundedAccountLive(): Promise<FundedAccount> {
   return { publicKey: keypair.publicKey(), encryptedSecret: encryptSecret(keypair.secret()) };
 }
 
-function createFundedAccountMock(): FundedAccount {
+async function createFundedAccountMock(): Promise<FundedAccount> {
   const keypair = Keypair.random();
-  db.insert(schema.mockBalances)
-    .values({ publicKey: keypair.publicKey(), balanceXLM: 10000 })
-    .run();
+  await db.insert(schema.mockBalances)
+    .values({ publicKey: keypair.publicKey(), balanceXLM: 10000 });
   return { publicKey: keypair.publicKey(), encryptedSecret: encryptSecret(keypair.secret()) };
 }
 
@@ -107,7 +106,7 @@ export async function createFundedAccount(): Promise<FundedAccount> {
 
 export async function getXlmBalance(publicKey: string): Promise<number> {
   if (isMockMode()) {
-    const row = db.select().from(schema.mockBalances).where(eq(schema.mockBalances.publicKey, publicKey)).get();
+    const [row] = await db.select().from(schema.mockBalances).where(eq(schema.mockBalances.publicKey, publicKey));
     return row?.balanceXLM ?? 0;
   }
   try {
@@ -131,11 +130,11 @@ export interface SendPaymentParams {
   memo?: string;
 }
 
-function sendPaymentMock(params: SendPaymentParams): string {
+async function sendPaymentMock(params: SendPaymentParams): Promise<string> {
   const sourceKeypair = Keypair.fromSecret(decryptSecret(params.fromEncryptedSecret));
   const fromPk = sourceKeypair.publicKey();
 
-  const fromRow = db.select().from(schema.mockBalances).where(eq(schema.mockBalances.publicKey, fromPk)).get();
+  const [fromRow] = await db.select().from(schema.mockBalances).where(eq(schema.mockBalances.publicKey, fromPk));
   const currentBalance = fromRow?.balanceXLM ?? 0;
   if (currentBalance < params.amountXLM) {
     throw new Error(
@@ -145,26 +144,22 @@ function sendPaymentMock(params: SendPaymentParams): string {
 
   const hash = `MOCK${randomUUID().replace(/-/g, "").toUpperCase()}`;
 
-  db.transaction((tx) => {
-    tx.update(schema.mockBalances)
+  await db.transaction(async (tx) => {
+    await tx.update(schema.mockBalances)
       .set({ balanceXLM: currentBalance - params.amountXLM })
-      .where(eq(schema.mockBalances.publicKey, fromPk))
-      .run();
+      .where(eq(schema.mockBalances.publicKey, fromPk));
 
-    const toRow = tx
+    const [toRow] = await tx
       .select()
       .from(schema.mockBalances)
-      .where(eq(schema.mockBalances.publicKey, params.toPublicKey))
-      .get();
+      .where(eq(schema.mockBalances.publicKey, params.toPublicKey));
     if (toRow) {
-      tx.update(schema.mockBalances)
+      await tx.update(schema.mockBalances)
         .set({ balanceXLM: toRow.balanceXLM + params.amountXLM })
-        .where(eq(schema.mockBalances.publicKey, params.toPublicKey))
-        .run();
+        .where(eq(schema.mockBalances.publicKey, params.toPublicKey));
     } else {
-      tx.insert(schema.mockBalances)
-        .values({ publicKey: params.toPublicKey, balanceXLM: params.amountXLM })
-        .run();
+      await tx.insert(schema.mockBalances)
+        .values({ publicKey: params.toPublicKey, balanceXLM: params.amountXLM });
     }
   });
 
@@ -227,13 +222,12 @@ export function explorerAccountUrl(publicKey: string): string | null {
  * first use and persisting it in the database (so it's stable across
  * restarts without any manual .env copy-pasting). */
 export async function ensurePlatformAccount(): Promise<FundedAccount> {
-  const existing = db.select().from(schema.platformAccount).get();
+  const [existing] = await db.select().from(schema.platformAccount);
   if (existing) return { publicKey: existing.publicKey, encryptedSecret: existing.encryptedSecret };
 
   const account = await createFundedAccount();
-  db.insert(schema.platformAccount)
-    .values({ publicKey: account.publicKey, encryptedSecret: account.encryptedSecret })
-    .run();
+  await db.insert(schema.platformAccount)
+    .values({ publicKey: account.publicKey, encryptedSecret: account.encryptedSecret });
 
   // eslint-disable-next-line no-console
   console.warn(
